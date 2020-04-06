@@ -1,0 +1,62 @@
+$script_ansible = <<-SCRIPT
+apt update && \
+apt install -y software-properties-common && \
+apt-add-repository --yes ppa:ansible/ansible && \
+apt update && \
+apt install -y ansible
+SCRIPT
+
+Vagrant.configure("2") do |config|
+  
+  config.vm.box = "geerlingguy/centos7"
+
+  config.ssh.insert_key = false #permite usar a chave padrão insegura ou configurar o guest com seu próprio par 
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+  config.vm.synced_folder "./chave", "/chave", mount_options: ["fmode=400", "dmode=777"]
+
+  config.vm.provider "virtualbox" do |v|
+    v.memory = 256
+    v.linked_clone = true #agiliza deploy da VM, pois cria uma e as outras se baseiam na primeira    
+  end
+
+  config.vm.define "ansible" do |ansible|
+
+    ansible.vm.box = "ubuntu/trusty64"
+    ansible.vm.network :private_network, ip: "192.168.60.3"
+    ansible.vm.hostname = "ansible"
+
+    ansible.vm.provider "virtualbox" do |v|
+      v.memory = 512          
+    end
+
+    ansible.vm.provision "shell", inline: $script_ansible
+    ansible.vm.provision "shell", inline: "cat /ansible_files/ansible.cfg > /etc/ansible/ansible.cfg"
+        
+    ansible.vm.synced_folder "./ansible_files", "/ansible_files",
+      mount_options: ["fmode=666", "dmode=777"]      
+            
+  end
+      
+  config.vm.define "app1" do |app|
+    app.vm.hostname = "orc-app1.test"
+    app.vm.network :private_network, ip: "192.168.60.4"
+
+    app.vm.provision "shell", inline: "cat /chave/minha_chave.pub >> .ssh/authorized_keys"
+  end
+
+  config.vm.define "app2" do |app|
+    app.vm.hostname = "orc-app2.test"
+    app.vm.network :private_network, ip: "192.168.60.5"
+
+    app.vm.provision "shell", inline: "cat /chave/minha_chave.pub >> .ssh/authorized_keys"
+  end
+
+  config.vm.define "db" do |db|
+    db.vm.hostname = "orc-db.test"
+    db.vm.network :private_network, ip: "192.168.60.6"
+
+    db.vm.provision "shell", inline: "cat /chave/minha_chave.pub >> .ssh/authorized_keys"
+  end
+
+end
+

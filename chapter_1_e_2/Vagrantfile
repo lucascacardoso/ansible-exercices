@@ -1,0 +1,44 @@
+$script_ansible = <<-SCRIPT
+apt update && \
+apt install -y software-properties-common && \
+apt-add-repository --yes ppa:ansible/ansible && \
+apt update && \
+apt install -y ansible
+SCRIPT
+
+Vagrant.configure("2") do |config|
+  
+  config.vm.box = "ubuntu/trusty64"
+
+  config.vm.provider "virtualbox" do |v|
+    v.memory = 1024
+  end
+
+  provisioner = Vagrant::Util::Platform.windows? ? :guest_ansible : :ansible
+  
+  config.vm.define "ansible" do |ansible|
+    ansible.vm.network "public_network", ip: "192.168.0.203", 
+      bridge: "Qualcomm Atheros QCA9377 Wireless Network Adapter"
+        
+    ansible.vm.provider "virtualbox" do |vb|
+      vb.name = "ubuntu_trusty_ansible"
+    end 
+
+    ansible.vm.provision "shell", inline: $script_ansible
+    ansible.vm.provision "shell", inline: "cat /ansible_files/ansible.cfg > /etc/ansible/ansible.cfg"
+    
+    ansible.vm.synced_folder "./ansible_files", "/ansible_files",
+      mount_options: ["fmode=666", "dmode=777"]
+      
+    ansible.vm.synced_folder "./chave", "/chave",
+      mount_options: ["fmode=400", "dmode=777"]        
+  end
+  
+  config.vm.define "localserver" do |localserver|
+    localserver.vm.box = "geerlingguy/centos7"
+
+    localserver.vm.provision provisioner do |ansible|
+      ansible.playbook = "./ansible_files/playbook.yml"
+    end  
+  end  
+end
